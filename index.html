@@ -48,20 +48,33 @@
         #downloadLink:hover {
             color: #1e7e34;
         }
+
+        .checkbox-group {
+            text-align: left;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
         <h1><i class="fas fa-file-upload"></i> JSON to CSV Converter</h1>
-        <input type="file" class="form-control" id="jsonFile" accept="application/json">
+        <input type="file" class="form-control" id="jsonFile" accept="application/json" onchange="loadJsonProperties()">
+        <div id="checkboxContainer" class="checkbox-group"></div>
         <button class="btn btn-primary" onclick="convertToJson()">Convert to CSV</button>
         <br><br>
         <a id="downloadLink" style="display: none;"></a>
     </div>
 
     <script>
-        function convertToJson() {
+        let jsonProperties = {};
+
+        function loadJsonProperties() {
             const fileInput = document.getElementById('jsonFile');
             const file = fileInput.files[0];
 
@@ -74,25 +87,106 @@
             reader.onload = function (event) {
                 try {
                     const jsonData = JSON.parse(event.target.result);
-                    const headers = ["DNS Host Name", "CPU", "Max Clock Speed", "Number of Cores", "Number of Logical Processors", "RAM", "Drive Capacity", "Operating System"];
+                    jsonProperties = {};
+
+                    const assetsGroups = jsonData.Assets?.Assets_Groups_Collection || [];
+                    assetsGroups.forEach(group => {
+                        const assets = group.Assets_System_Collection || [];
+                        assets.forEach(asset => {
+                            asset.Assets_TableGroup1_Collection?.forEach(tableGroup => {
+                                tableGroup.Assets_Categories_Collection?.forEach(category => {
+                                    if (!jsonProperties[category.PropertyCategory]) {
+                                        jsonProperties[category.PropertyCategory] = new Set();
+                                    }
+                                    category.Detail_Collection?.forEach(detail => {
+                                        jsonProperties[category.PropertyCategory].add(detail.PropertyName);
+                                    });
+                                });
+                            });
+                        });
+                    });
+
+                    renderCheckboxes();
+                } catch (error) {
+                    alert('Invalid JSON file. Please check the file content.');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        function renderCheckboxes() {
+            const checkboxContainer = document.getElementById('checkboxContainer');
+            checkboxContainer.innerHTML = '';
+
+            for (const category in jsonProperties) {
+                const categoryHeader = document.createElement('h5');
+                categoryHeader.textContent = category;
+                checkboxContainer.appendChild(categoryHeader);
+
+                jsonProperties[category].forEach(property => {
+                    const checkboxWrapper = document.createElement('div');
+                    checkboxWrapper.className = 'form-check';
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-check-input';
+                    checkbox.id = property;
+                    checkbox.value = property;
+
+                    const label = document.createElement('label');
+                    label.className = 'form-check-label';
+                    label.htmlFor = property;
+                    label.textContent = property;
+
+                    checkboxWrapper.appendChild(checkbox);
+                    checkboxWrapper.appendChild(label);
+                    checkboxContainer.appendChild(checkboxWrapper);
+                });
+            }
+        }
+
+        function convertToJson() {
+            const fileInput = document.getElementById('jsonFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a JSON file.');
+                return;
+            }
+
+            const selectedProperties = Array.from(document.querySelectorAll('#checkboxContainer input:checked')).map(checkbox => checkbox.value);
+
+            if (selectedProperties.length === 0) {
+                alert('Please select at least one property to include in the CSV.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                try {
+                    const jsonData = JSON.parse(event.target.result);
+                    const headers = selectedProperties;
                     const rows = [];
 
                     const assetsGroups = jsonData.Assets?.Assets_Groups_Collection || [];
                     assetsGroups.forEach(group => {
                         const assets = group.Assets_System_Collection || [];
                         assets.forEach(asset => {
-                            const systemCategory = asset.Assets_TableGroup1_Collection?.[0]?.Assets_Categories_Collection?.find(category => category.PropertyCategory === "System");
-                            const osCategory = asset.Assets_TableGroup1_Collection?.[0]?.Assets_Categories_Collection?.find(category => category.PropertyCategory === "Operating System");
-                            const row = [
-                                asset.TextBox8 || "",  // DNS Host Name
-                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "CPU")?.PropertyValue || "",  // CPU
-                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Max Clock Speed")?.PropertyValue || "",  // Max Clock Speed
-                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Number of Cores")?.PropertyValue || "",  // Number of Cores
-                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Number of Logical Processors")?.PropertyValue || "",  // Number of Logical Processors
-                                asset.Assets_TableGroup1_Collection?.[0]?.TextBox27 || "",  // RAM
-                                asset.Assets_TableGroup1_Collection?.[0]?.TextBox31 || "",  // Drive Capacity
-                                osCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Name")?.PropertyValue || ""  // Operating System
-                            ];
+                            const row = [];
+                            selectedProperties.forEach(property => {
+                                let value = "";
+                                asset.Assets_TableGroup1_Collection?.forEach(tableGroup => {
+                                    tableGroup.Assets_Categories_Collection?.forEach(category => {
+                                        category.Detail_Collection?.forEach(detail => {
+                                            if (detail.PropertyName === property) {
+                                                value = detail.PropertyValue || "";
+                                            }
+                                        });
+                                    });
+                                });
+                                row.push(value);
+                            });
                             rows.push(row);
                         });
                     });
