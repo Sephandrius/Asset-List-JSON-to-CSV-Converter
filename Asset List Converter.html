@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON to CSV Converter</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
+            margin-top: 20px;
+        }
+
+        #downloadLink {
+            margin-top: 20px;
+            text-decoration: none;
+            color: #28a745;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        #downloadLink:hover {
+            color: #1e7e34;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1><i class="fas fa-file-upload"></i> JSON to CSV Converter</h1>
+        <input type="file" class="form-control" id="jsonFile" accept="application/json">
+        <button class="btn btn-primary" onclick="convertToJson()">Convert to CSV</button>
+        <br><br>
+        <a id="downloadLink" style="display: none;"></a>
+    </div>
+
+    <script>
+        function convertToJson() {
+            const fileInput = document.getElementById('jsonFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a JSON file.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                try {
+                    const jsonData = JSON.parse(event.target.result);
+                    const headers = ["DNS Host Name", "CPU", "Max Clock Speed", "Number of Cores", "Number of Logical Processors", "RAM", "Drive Capacity", "Operating System"];
+                    const rows = [];
+
+                    const assetsGroups = jsonData.Assets?.Assets_Groups_Collection || [];
+                    assetsGroups.forEach(group => {
+                        const assets = group.Assets_System_Collection || [];
+                        assets.forEach(asset => {
+                            const systemCategory = asset.Assets_TableGroup1_Collection?.[0]?.Assets_Categories_Collection?.find(category => category.PropertyCategory === "System");
+                            const osCategory = asset.Assets_TableGroup1_Collection?.[0]?.Assets_Categories_Collection?.find(category => category.PropertyCategory === "Operating System");
+                            const row = [
+                                asset.TextBox8 || "",  // DNS Host Name
+                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "CPU")?.PropertyValue || "",  // CPU
+                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Max Clock Speed")?.PropertyValue || "",  // Max Clock Speed
+                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Number of Cores")?.PropertyValue || "",  // Number of Cores
+                                systemCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Number of Logical Processors")?.PropertyValue || "",  // Number of Logical Processors
+                                asset.Assets_TableGroup1_Collection?.[0]?.TextBox27 || "",  // RAM
+                                asset.Assets_TableGroup1_Collection?.[0]?.TextBox31 || "",  // Drive Capacity
+                                osCategory?.Detail_Collection?.find(detail => detail.PropertyName === "Name")?.PropertyValue || ""  // Operating System
+                            ];
+                            rows.push(row);
+                        });
+                    });
+
+                    let csvContent = headers.join(",") + "\n";
+                    rows.forEach(row => {
+                        csvContent += row.join(",") + "\n";
+                    });
+
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const downloadLink = document.getElementById('downloadLink');
+                    downloadLink.href = url;
+                    downloadLink.download = 'export.csv';
+                    downloadLink.style.display = 'block';
+                    downloadLink.textContent = 'Download CSV';
+                } catch (error) {
+                    alert('Invalid JSON file. Please check the file content.');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+</body>
+
+</html>
